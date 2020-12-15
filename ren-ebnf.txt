@@ -1,0 +1,199 @@
+WhiteSpace ::= (Space | Comment)+
+
+Space ::= SpaceChar+
+
+SpaceChar ::=  #x9 | #xA | #xD | #x20
+
+Comment ::= ';' [^#xA#xD]*
+
+
+/*
+Values ::= WhiteSpace? Value? (WhiteSpace Value)* WhiteSpace?
+*/
+Values ::= Value? (WhiteSpace Value)* WhiteSpace?
+
+Value ::= List | Map | String | Number | Logic | None | DateTime 
+          | Word | ImpliedString | SegmentedNumber | Point
+          | Base16Binary | Base64Binary 
+/*
+    | Hashtag
+*/
+
+
+List ::= "[" Value* "]"
+
+Map ::= "#[" Name-Value-Pair* "]"
+
+Name-Value-Pair ::= Name Space Value
+
+Name ::= Word ':' Space
+
+
+Logic ::= 'true' | 'false' | 'on' | 'off' | 'yes' | 'no'
+
+None ::= 'none'
+
+
+String ::= QuotedString
+
+QuotedString ::= '"' (QuotedStringChar | EscapedChar)* '"'
+
+/* Anything but a null, newline, or escape char */
+QuotedStringChar ::= [^#x0#xA"^]
+
+EscapedChar ::= '^' (
+	  '^' | '@' | '-' | '/' | [A-Z]
+	  
+	  /* separators [file group record unit] */
+	  /*
+	  | '\' | ']' | '!' | '_'   
+	  */
+	  
+	| '(' (
+		  'null' | 'line' | 'tab'
+		/* What repetition syntax does it want? */
+		| HexDigit HexDigit HexDigit HexDigit HexDigit HexDigit HexDigit HexDigit 
+		| HexDigit HexDigit HexDigit HexDigit 
+	) ')'
+)
+	
+
+Sign ::= "+" | "-"
+
+Digit ::= [0-9]
+
+Integer ::= Sign? Digit+
+
+HexDigit ::= [0-9a-fA-F]
+
+DecimalSeparator ::= '.'
+
+DecimalExponent ::= 'e' | 'E' Integer
+
+DecimalPart ::= '.' Digit*
+ExponentPart ::= 'e' | 'E' Sign? Digit+
+Number ::= Integer DecimalPart ExponentPart
+/*
+Number ::= Integer ('.' Digit*)? (('e' | 'E') Integer)?
+*/
+
+Percent ::= Number '%'
+
+Not-a-Number ::= '1.#NaN'
+Infinity ::= Sign? '1.#INF'
+
+
+CharSign ::= Sign
+
+Alpha ::= [a-zA-Z]
+
+
+WordFirstChar ::= [#x21-#x7E] - (Digit | [{}"()/\@#$%^,:;<>] | '[' | ']' | "'")
+
+WordChar ::= WordFirstChar | [0-9']
+
+Word ::= WordFirstChar WordChar*
+
+/*
+Hashtag ::= '#' WordChar+
+*/
+
+ImpliedString ::= WordFirstChar WordChar*
+
+ImpliedStringInnerChar ::= WordInnerChar | [/\@#$%,:']
+
+/* n-tuple ? */
+/* pair/ordered-pair triple/triplet  quad  */
+SegmentedNumber ::= Integer SegNumSegment SegNumSegment+
+
+SegNumSegment ::= '.' Integer
+
+
+Point ::= Number Axis+
+
+Axis ::= 'x' Number
+
+
+/* 
+    Date/Time
+    http://www.ietf.org/rfc/rfc3339.txt
+*/
+
+FourDigits ::= Digit Digit Digit Digit
+TwoDigits ::= Digit Digit
+
+DateSegmentSep ::= '-'
+TimeSegmentSep ::= ':'
+DateTimeSep ::= '/' | 'T' | '@'
+
+Date-FullYear ::= FourDigits
+Date-Month    ::= TwoDigits  /* 01-12 */
+Date-MonthDay ::= TwoDigits  /* 01-28, 01-29, 01-30, 01-31 based on month/year */
+
+/* Ren will not support leap seconds */
+
+
+Time-Hour     ::= TwoDigits  /* 00-23 */
+Time-Minute   ::= TwoDigits  /* 00-59 */
+Time-Second   ::= TwoDigits  /* 00-58, 00-59, 00-60 based on leap second rules */
+
+Time-SecFrac   ::= DecimalSeparator Digit?
+Time-NumOffset ::= Sign Time-Hour ':' Time-Minute
+Time-Zone      ::= "Z" | Time-NumOffset
+
+Partial-Time ::= Time-Hour ":" Time-Minute ":" Time-Second Time-SecFrac?
+
+FullDate ::= Date-FullYear "-" Date-Month "-" Date-MonthDay
+FullTime ::= Partial-Time time-Zone
+
+Date ::= Date-FullYear "-" Date-Month "-" Date-MonthDay
+Time ::= Sign? Time-Hour ":" Time-Minute (":" Time-Second Time-SecFrac?)?
+DateTime ::= FullDate DateTimeSep FullTime
+
+
+/*
+    Binary
+*/
+/*
+Base2Char ::= '0' | '1' | Space
+*/
+
+Base16Char ::= HexDigit | Space
+
+Base64Char ::= Alpha | Digit | '+' | '/' | Space
+
+/* Base 2 requires groups of 8 digits */
+/*
+Base2Binary ::= '2#{' Space* (
+	Base2Char Base2Char Base2Char Base2Char	Base2Char Base2Char Base2Char Base2Char
+)* '}'
+*/
+
+/* Base 16 requires groups of 2 digits */
+/* Base16Binary ::= '16#{' Space* (HexDigit Space* HexDigit Space*)* '}' */
+Base16Binary ::= '16'? '#{' Space* (Base16Char Base16Char)* '}'
+
+/* 
+Base 64 requires padding if unencoded data was not a multiple of 3 bytes in
+length. '=' is only allowed as the last two characters, for padding.
+*/
+/*
+  ?? Should we make Space part of the base64 charset, and just discard it? (MIME RFC2045)
+*/
+/*
+B64_4 ::= (Base64Char Space* Base64Char Space* Base64Char Space* Base64Char Space*)
+B64_3 ::= (Base64Char Space* Base64Char Space* Base64Char Space* '=' Space*)
+B64_2 ::= (Base64Char Space* Base64Char Space* '=' Space* '=' Space*)
+Base64Binary ::= '64#{' Space* (B64_4* (B64_3 | B64_2)?) '}'
+*/
+/* Base64Binary ::= '64#{' Space* (B64_3 | B64_2 | (B64_4* (B64_3 | B64_2)?)) '}' */
+
+B64_4 ::= (Base64Char Base64Char Base64Char Base64Char)
+B64_3 ::= (Base64Char Base64Char Base64Char B64_pad)
+B64_2 ::= (Base64Char Base64Char B64_pad B64_pad)
+B64_pad ::= '=' Space*
+Base64Binary ::= '64#{' Space* (B64_4* (B64_3 | B64_2)?) '}'
+
+
+
+
